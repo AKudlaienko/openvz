@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="17edaafd-ea58-4f50-926a-a741383583e5" name="toor" url="http://192.168.0.102">
+        <fileTransfer host="192.168.0.102" port="22" privateKey="$USER_HOME$/.ssh/id_rsa_h" rootFolder="/home/toor/pycharm" accessType="SFTP" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="100000" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
