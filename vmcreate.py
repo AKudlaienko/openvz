@@ -7,6 +7,7 @@ import select
 import prlsdkapi
 from prlsdkapi import *
 
+
 from pprint import pprint
 
 
@@ -24,7 +25,7 @@ def init():
 def deinit():
     print "deinit_sdk"
     prlsdkapi.deinit_sdk()
-    
+
 
 # Create a Virtuozzo Container.
 def create(srv, name, os_template):
@@ -79,7 +80,7 @@ def addHdd(ct, image, size):
     hdd.set_enabled(True)
     hdd.create_image(bRecreateIsAllowed=True, bNonInteractiveMode=True).wait()
     ct.commit().wait()
-    
+
 
 # Execute a program in a Container.
 def execute(ct, cmd, args):
@@ -156,6 +157,69 @@ def create_ct(ct_name, ct_os_template, ct_cpu_limit, ct_ram):
     srv.logoff().wait()
     deinit()
 #################
+def get_hdd_info(vm):
+    # Obtain the VmConfig object containing the virtual server
+    # configuration information.
+    vm_config = vm.get_config()
+    count = vm_config.get_hard_disks_count()
+    vm_hdds_info = []
+    for d in range(count):
+        hdd = vm_config.get_hard_disk(d)
+        emulated_type = hdd.get_emulated_type()
+
+        if emulated_type == consts.PDT_USE_REAL_DEVICE:
+            hdd_emulated_type_inf = {"boot_camp": hdd.get_friendly_name()}
+        elif emulated_type == consts.PDT_USE_IMAGE_FILE:
+            hdd_emulated_type_inf = {"image_file": hdd.get_image_path()}
+        else:
+            hdd_emulated_type_inf = "UNKNOWN"
+
+        if hdd.get_disk_type() == consts.PHD_EXPANDING_HARD_DISK:
+            hdd_type_inf = "expanding_disk"
+        elif hdd.get_disk_type() == consts.PHD_PLAIN_HARD_DISK:
+            hdd_type_inf = "plain_disk"
+        else:
+            hdd_type_inf = "UNKNOWN"
+        # Disk size in Mbytes
+        hdd_info = {"hdd_number": d, "size": hdd.get_disk_size(), "size_on_ph_drive": hdd.get_size_on_disk(),
+                    "hdd_emulated_type": hdd_emulated_type_inf, "hdd_type": hdd_type_inf}
+        vm_hdds_info.append(hdd_info)
+    return vm_hdds_info
+
+
+def get_net_adapter_info(vm):
+    # Obtain the VmConfig object containing the virtual server
+    # configuration information.
+    vm_config = vm.get_config()
+    # Obtain the network interface info.
+    # The vm.net_adapters sequence contains objects of type VmNetDev.
+    count = vm_config.get_net_adapters_count()
+    vm_net_adapter_info = []
+    for n in range(count):
+        net_adapter = vm_config.get_net_adapter(n)
+        emulated_type = net_adapter.get_emulated_type()
+
+        if emulated_type == consts.PNA_HOST_ONLY:
+            n_emulated_type = "host-only"
+        elif emulated_type == consts.PNA_SHARED:
+            n_emulated_type = "shared"
+        elif emulated_type == consts.PNA_BRIDGED_ETHERNET:
+            n_emulated_type = {"bridged": net_adapter.get_bound_adapter_name()}
+        else:
+            n_emulated_type = "UNKNOWN"
+        #n_type = net_adapter.get_iface_type()
+        n_type = ""
+        n_gateway = net_adapter.get_default_gateway()
+        n_name = net_adapter.get_bound_adapter_name()
+
+        n_ip = ""
+        n_mac_address = str(net_adapter.get_mac_address())
+        net_adapter_info = {"net_adapter": n, "emulated_type": n_emulated_type, "mac_address": n_mac_address,
+                            "type": n_type, "gateway": n_gateway, "name": n_name, "ip": n_ip}
+        vm_net_adapter_info.append(net_adapter_info)
+    return vm_net_adapter_info
+
+###
 def get_vm_os_info(vm):
 
  print("\n-----------------------------")
@@ -191,11 +255,11 @@ def get_vm_os_info(vm):
 
 
 ###
-def createvm(vm_name, vm_description, vm_ram_size, vm_hdd_size):
+def get_vm_info():
     init()
     server = prlsdkapi.Server()
-    server.login_local().wait()
-    #server.login('127.0.0.1', 'user', 'test_user').wait()
+    #server.login_local().wait()
+    server.login('127.0.0.1', 'user', 'passwd_with_sudo_priv').wait()
 # Obtain the prlsdkapi.ServerConfig object.
 # The object contains the host server configuration information.
     job_vm_list = server.get_vm_list_ex(consts.PVTF_VM | consts.PVTF_CT)
@@ -213,16 +277,16 @@ def createvm(vm_name, vm_description, vm_ram_size, vm_hdd_size):
         # Get the name of the virtual server.
         params = {"get_name": 'get_name()'}
         #for param in params:
-
         member_name = member_config.get_name()
+        member_os = member_config.get_os_type()
         member_hostname = member_config.get_hostname()
         member_description = member_config.get_description()
         member_cpu_count = member_config.get_cpu_count()
         member_ram = member_config.get_ram_size()
         member_auto_start = member_config.get_auto_start()
         member_vnc = member_config.get_vncmode()
-        #member_hdd = member_config.get_hard_disk()
-        #member_gateway = member_config.get_default_gateway()
+        member_hdd = get_hdd_info(member)
+        member_net_adapters = get_net_adapter_info(member)
         member_dns_raw = member_config.get_dns_servers()
         member_search_domains_raw = member_config.get_search_domains()
         member_search_domains = []
@@ -231,15 +295,14 @@ def createvm(vm_name, vm_description, vm_ram_size, vm_hdd_size):
             member_dns.append(d)
         for s in member_search_domains_raw:
             member_search_domains.append(s)
-
         # CPU usage limit (in percent) for a virtual machine.
         #member_cpu_limit = member_config.get_cpu_limit()
         # Determine the number of CPU units allocated to a virtual machine.
         member_cpu_units = member_config.get_cpu_units()
         member_type = member_config.get_vm_type()
         member_is_template = member_config.is_template()
+        # member_gateway = member_config.get_default_gateway()
 
-        #member_disk_size =
         if member_type == consts.PVT_VM:
             member_type_is = "VM"
         elif member_type == consts.PVT_CT:
@@ -250,7 +313,7 @@ def createvm(vm_name, vm_description, vm_ram_size, vm_hdd_size):
         member_info = {"hostname": member_hostname, "description": member_description, "cpu_count": member_cpu_count,
                        "ram": member_ram, "auto_start": member_auto_start, "type": member_type_is,
                        "template": member_is_template, "vnc": member_vnc, "search_domains": member_search_domains,
-                       "hdd": "", "dns": member_dns}
+                       "hdd": member_hdd, "dns": member_dns, "net_adapters": member_net_adapters, "os": member_os}
         members_info.update({member_name: member_info})
     for name, details in members_info.items():
         print("\nname: {0}\n{1}\n***************************************************".format(name, details))
@@ -397,10 +460,5 @@ def execute(vm):
     vm_guest.logout().wait()
 
 
-
-
-### MAIN ###
-
 if __name__ == "__main__":
-#    create_ct("testct_VM", 'CentOS7-man-net', ct_cpu_limit, ct_ram)
-    createvm("test2_centos7", "test_centos7 via API", 2048, 10000)
+    get_vm_info()
